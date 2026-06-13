@@ -1,0 +1,7 @@
+.env
+github_traffic_*.csv
+__pycache__/
+*.pyc
+.venv/
+venv/
+env/
