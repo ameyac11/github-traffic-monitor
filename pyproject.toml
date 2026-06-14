@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "github-traffic-monitor"
-version = "0.1.0"
+version = "0.1.1"
 description = "Monitor and automate your GitHub repository traffic analytics."
 readme = "README.md"
 requires-python = ">=3.9"
