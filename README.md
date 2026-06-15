@@ -8,6 +8,7 @@
 [![PyPI](https://img.shields.io/pypi/v/gitlytics?color=blue)](https://pypi.org/project/gitlytics/)
 [![React](https://img.shields.io/badge/UI-React-61dafb?logo=react)](https://react.dev/)
 [![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?logo=fastapi)](https://fastapi.tiangolo.com/)
+[![Automation](https://img.shields.io/badge/Data%20Backup-Automation%20Tool-purple?logo=github-actions)](https://github.com/ameyac11/github-traffic-monitor-automation)
 
 **Beautiful GitHub traffic analytics for all your repositories — public and private.** 📈
 
@@ -30,7 +31,7 @@ A local-only GitHub traffic analytics tool with two modes:
 
 View 14-day views, clones, referrers, and popular paths for **all** your repositories. Everything runs on your machine. Your token never leaves your device.
 
-![GitHub Traffic Dashboard](assets/gittracker_thumnail1.png)
+![GitHub Traffic Dashboard](https://raw.githubusercontent.com/ameyac11/gitlytics/main/assets/gittracker_thumnail1.png)
 
 ---
 
@@ -153,8 +154,8 @@ You can also store your token in a `.env` file as `GITHUB_TOKEN=ghp_...` so you 
 ## 🛠️ Development Install
 
 ```bash
-git clone https://github.com/ameyac11/github-traffic-monitor
-cd github-traffic-monitor
+git clone https://github.com/ameyac11/gitlytics
+cd gitlytics
 pip install -e ".[dev,dashboard]"
 ```
 
@@ -169,7 +170,7 @@ pytest
 
 ## 🌟 Show Your Support
 
-If you find this project useful, please consider giving it a ⭐ on [GitHub](https://github.com/ameyac11/github-traffic-monitor)! It helps more people discover the tool.
+If you find this project useful, please consider giving it a ⭐ on [GitHub](https://github.com/ameyac11/gitlytics)! It helps more people discover the tool.
 
 ---
 
