@@ -24,9 +24,6 @@ def validate_token(token: str) -> tuple[bool, str]:
         return False, str(e)
 
     if r.status_code == 200:
-        scopes = r.headers.get("X-OAuth-Scopes", "")
-        if "repo" not in [s.strip() for s in scopes.split(",")]:
-            return False, "Token must have the 'repo' scope enabled."
         data = r.json()
         return True, data.get("login", "")
     if r.status_code == 401:
@@ -45,11 +42,16 @@ def _safe_get(url: str, headers: dict, params: dict = None):
 def get_all_repos(token: str) -> list[dict]:
     headers = make_headers(token)
     repos, page = [], 1
+    seen = set()
     while True:
         data = _safe_get(f"{BASE}/user/repos", headers, {"per_page": 100, "page": page, "type": "all"})
         if not data or not isinstance(data, list):
             break
-        repos.extend(data)
+        for repo in data:
+            fname = repo.get("full_name")
+            if fname and fname not in seen:
+                seen.add(fname)
+                repos.append(repo)
         if len(data) < 100:
             break
         page += 1
@@ -77,11 +79,24 @@ def get_repo_traffic(token: str, full_name: str) -> dict:
     }
 
 def pad_traffic_data(traffic: dict) -> list[dict]:
-    today = datetime.now(timezone.utc)
-    dates = [(today - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(13, -1, -1)]
-    
     views_list = traffic.get("views", {}).get("views", [])
     clones_list = traffic.get("clones", {}).get("clones", [])
+    
+    # Dynamically find the latest date GitHub has actually processed
+    latest_date_str = None
+    for item in views_list + clones_list:
+        date_str = item["timestamp"][:10]
+        if latest_date_str is None or date_str > latest_date_str:
+            latest_date_str = date_str
+            
+    if latest_date_str:
+        end_date = datetime.strptime(latest_date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+    else:
+        # Fallback if the repository has literally 0 views and 0 clones over 14 days
+        end_date = datetime.now(timezone.utc)
+        
+    # Generate exactly 14 days ending on the latest available date
+    dates = [(end_date - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(13, -1, -1)]
     
     views_map = {v["timestamp"][:10]: v for v in views_list}
     clones_map = {c["timestamp"][:10]: c for c in clones_list}

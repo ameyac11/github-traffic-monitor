@@ -60,8 +60,17 @@ export async function authenticate(token: string): Promise<AuthResult> {
     body: JSON.stringify({ token }),
   });
   if (!res.ok) {
+    let errorDetail = `Authentication failed (${res.status}).`;
+    try {
+      const errorData = await res.json();
+      if (errorData.detail) {
+        errorDetail = errorData.detail;
+      }
+    } catch (e) {
+      // ignore json parse error
+    }
     throw new Error(
-      `Authentication failed (${res.status}). Check your token and that the backend is running.`,
+      `${errorDetail} Check your token and that the backend is running.`,
     );
   }
   const data = (await res.json()) as AuthResult;

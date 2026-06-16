@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
 
 from gitlytics.core import validate_token, fetch_traffic_data
-from gitlytics.process import process_uploaded_csv
+from gitlytics.process import process_uploaded_csv, build_react_payload
 
 app = FastAPI(title="GitHub Traffic API")
 
@@ -84,14 +84,20 @@ def get_traffic(token: str = Body("", embed=True)):
         df = fetch_traffic_data(active_token)
         
     df = df.replace([float('inf'), float('-inf')], None).where(pd.notnull(df), None)
-    return df.to_dict(orient="records")
+    
+    # Process into the exact array format required by React
+    payload = build_react_payload(df)
+    return payload
 
 @app.post("/api/upload-csv")
 def upload_csv(file: UploadFile = File(...)):
     try:
         df = process_uploaded_csv(file.file)
         df = df.replace([float('inf'), float('-inf')], None).where(pd.notnull(df), None)
-        return df.to_dict(orient="records")
+        
+        # Process into the exact array format required by React
+        payload = build_react_payload(df)
+        return payload
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 

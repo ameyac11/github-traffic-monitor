@@ -115,3 +115,71 @@ def process_uploaded_csv(uploaded_file) -> pd.DataFrame:
         else:
             raise ValueError("Invalid CSV format: missing 'repository' column")
     return raw_df
+
+def build_react_payload(df: pd.DataFrame) -> list:
+    """
+    Transforms the Tidy Data DataFrame into the exact array of RepoTraffic objects
+    expected by the React frontend (preventing duplicated rows and populating charts).
+    """
+    if df.empty:
+        return []
+
+    repos = []
+    for repo, group in df.groupby("repository"):
+        group = group.sort_values("date")
+        
+        r_views = int(group["views"].sum()) if "views" in group.columns else 0
+        r_clones = int(group["clones"].sum()) if "clones" in group.columns else 0
+        r_unique_v = int(group["unique_visitors"].sum()) if "unique_visitors" in group.columns else 0
+        r_unique_c = int(group["unique_cloners"].sum()) if "unique_cloners" in group.columns else 0
+        
+        r_stars = int(group["stars"].dropna().iloc[-1]) if "stars" in group.columns and not group["stars"].dropna().empty else 0
+        r_forks = int(group["forks"].dropna().iloc[-1]) if "forks" in group.columns and not group["forks"].dropna().empty else 0
+        r_is_private = bool(group["is_private"].dropna().iloc[-1]) if "is_private" in group.columns and not group["is_private"].dropna().empty else False
+        
+        top_ref = str(group["top_referrer"].dropna().iloc[-1]) if "top_referrer" in group.columns and not group["top_referrer"].dropna().empty else ""
+        top_ref_views = int(group["top_referrer_views"].dropna().iloc[-1]) if "top_referrer_views" in group.columns and not group["top_referrer_views"].dropna().empty else 0
+        top_ref_uniques = int(group["top_referrer_uniques"].dropna().iloc[-1]) if "top_referrer_uniques" in group.columns and not group["top_referrer_uniques"].dropna().empty else 0
+        
+        top_path = str(group["top_path"].dropna().iloc[-1]) if "top_path" in group.columns and not group["top_path"].dropna().empty else ""
+        top_path_views = int(group["top_path_views"].dropna().iloc[-1]) if "top_path_views" in group.columns and not group["top_path_views"].dropna().empty else 0
+        top_path_uniques = int(group["top_path_uniques"].dropna().iloc[-1]) if "top_path_uniques" in group.columns and not group["top_path_uniques"].dropna().empty else 0
+
+        daily_views = []
+        daily_clones = []
+        for _, row in group.iterrows():
+            date_str = str(row["date"])
+            daily_views.append({
+                "timestamp": date_str,
+                "count": int(row.get("views", 0)),
+                "uniques": int(row.get("unique_visitors", 0))
+            })
+            daily_clones.append({
+                "timestamp": date_str,
+                "count": int(row.get("clones", 0)),
+                "uniques": int(row.get("unique_cloners", 0))
+            })
+            
+        repos.append({
+            "repository": repo,
+            "is_private": r_is_private,
+            "stars": r_stars,
+            "forks": r_forks,
+            "views": r_views,
+            "unique_visitors": r_unique_v,
+            "clones": r_clones,
+            "unique_cloners": r_unique_c,
+            "top_referrer": top_ref,
+            "top_referrer_views": top_ref_views,
+            "top_referrer_uniques": top_ref_uniques,
+            "top_path": top_path,
+            "top_path_views": top_path_views,
+            "top_path_uniques": top_path_uniques,
+            "_daily_views": daily_views,
+            "_daily_clones": daily_clones,
+            "_referrers": [{"referrer": top_ref, "count": top_ref_views, "uniques": top_ref_uniques}] if top_ref else [],
+            "_paths": [{"path": top_path, "title": top_path, "count": top_path_views, "uniques": top_path_uniques}] if top_path else []
+        })
+        
+    return repos
+
