@@ -4,14 +4,19 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "gitlytics"
-version = "0.1.1"
+version = "0.1.2"
 description = "Monitor and automate your GitHub repository traffic analytics."
 readme = "README.md"
 requires-python = ">=3.9"
+license = { text = "Apache-2.0" }
+authors = [
+    { name = "Ameya Chopade" }
+]
 dependencies = [
     "requests",
     "pandas",
-    "python-dotenv"
+    "python-dotenv",
+    "croniter"
 ]
 keywords = [
     "github",
@@ -26,6 +31,9 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 
+[project.urls]
+Homepage = "https://github.com/ameyac11/gitlytics"
+
 [project.optional-dependencies]
 dashboard = ["fastapi", "uvicorn", "python-multipart"]
 dev = [
@@ -34,10 +42,11 @@ dev = [
 ]
 
 [project.scripts]
-gitlytics = "github_traffic.cli:main"
+gitlytics = "gitlytics.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["github_traffic*"]
+where = ["src"]
+include = ["gitlytics*"]
 
 [tool.setuptools.package-data]
-"github_traffic" = ["frontend/dist/**/*", "frontend/dist/*"]
+"gitlytics" = ["static/**/*", "static/*"]

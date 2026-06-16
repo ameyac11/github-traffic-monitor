@@ -1,0 +1,120 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+:root {
+  --radius: 0.75rem;
+
+  /* Pure black, warm-gray surfaces, Claude coral accent */
+  --background: #000000;
+  --foreground: #ece7e1;
+
+  --surface: #161514;
+  --surface-2: #1f1d1a;
+
+  --card: #161514;
+  --card-foreground: #ece7e1;
+  --popover: #161514;
+  --popover-foreground: #ece7e1;
+
+  /* Claude coral / orange #D97757 */
+  --primary: #d97757;
+  --primary-foreground: #1a120e;
+
+  --secondary: #211f1c;
+  --secondary-foreground: #ece7e1;
+
+  --muted: #211f1c;
+  --muted-foreground: #948c82;
+
+  --accent: #262320;
+  --accent-foreground: #ece7e1;
+
+  /* Muted sage */
+  --success: #94a187;
+  --success-foreground: #14130f;
+
+  --destructive: #c4654a;
+  --destructive-foreground: #1a120e;
+
+  --border: #2a2723;
+  --input: #2a2723;
+  --ring: #d97757;
+
+  --chart-1: #d97757; /* coral */
+  --chart-2: #e8c396; /* soft sand */
+  --chart-3: #94a187; /* sage */
+  --chart-4: #c9a87c; /* warm tan */
+  --chart-5: #b5715a; /* deep coral */
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+  }
+}
+
+@utility glass {
+  background: color-mix(in oklab, var(--surface) 90%, transparent);
+  backdrop-filter: blur(12px) saturate(110%);
+  border: 1px solid var(--border);
+}
+
+@utility gradient-border {
+  border: 1px solid var(--border);
+}
+
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@utility animate-slide-up {
+  animation: slide-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
