@@ -1,1 +1,2 @@
-# Test module for github-traffic-monitor
+# Makes the tests/ folder a Python package so pytest can discover all test files
+

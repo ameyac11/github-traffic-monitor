@@ -7,6 +7,9 @@
 - Database no longer fragments when the sync cron job runs from a different working directory.
 - Cron logs now appear correctly in all environments instead of being swallowed by stdout buffering.
 - Star and fork counts now reflect the latest snapshot rather than an inflated cumulative sum.
+- Fixed `export_json_database` doubling traffic counts when reading overlapping monthly and yearly CSV files.
+- Fixed JSON timeseries payload missing `clones` due to a duplicate `unique_visitors` dictionary key.
+- Fixed CLI package entry point (added `__main__.py`) allowing execution via `python -m gitlytics`.
 
 ### Changed
 - JSON exports now strip private repositories by default (`export_public_only=True`) to prevent accidental leaks.

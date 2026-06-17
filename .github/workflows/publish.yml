@@ -9,7 +9,7 @@ jobs:
     name: Build and publish to PyPI
     runs-on: ubuntu-latest
     environment: pypi
-    
+
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
@@ -17,13 +17,13 @@ jobs:
     permissions:
       id-token: write
       contents: read
-      
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v5
         with:
           python-version: "3.x"
 
@@ -31,9 +31,9 @@ jobs:
         run: pip install build
 
       - name: Set up Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 20
 
       - name: Build React Frontend
         working-directory: ./frontend
@@ -45,4 +45,5 @@ jobs:
         run: python -m build
 
       - name: Publish package
-        uses: pypa/gh-action-pypi-publish@release/v1
+        # Fix #23: Pin to a specific immutable tag instead of the mutable @release/v1 branch.
+        uses: pypa/gh-action-pypi-publish@v1.12.4

@@ -17,9 +17,10 @@ import { DashboardToolbar } from "./DashboardToolbar";
 
 const DEFAULT_AVATAR = "https://github.com/octocat.png";
 
-type Source =
-  | { mode: "api"; auth: AuthResult; token: string }
-  | { mode: "csv"; data: RepoTraffic[] };
+// Fix #21: Use explicit typed union branches instead of `as any` casts.
+type ApiSource = { mode: "api"; auth: AuthResult; token: string };
+type CsvSource = { mode: "csv"; data: RepoTraffic[]; filename?: string };
+type Source = ApiSource | CsvSource;
 
 export function DashboardView({
   source,
@@ -29,15 +30,18 @@ export function DashboardView({
   onLogout: () => void;
 }) {
   const isApi = source.mode === "api";
+  // Narrow the discriminated union once to avoid repeated casts
+  const apiSource = isApi ? (source as ApiSource) : null;
+  const csvSource = !isApi ? (source as CsvSource) : null;
 
   const query = useQuery({
-    queryKey: ["traffic", isApi ? (source as any).auth.username : "csv"],
-    queryFn: () => fetchTraffic((source as any).token),
+    queryKey: ["traffic", isApi ? apiSource!.auth.username : "csv"],
+    queryFn: () => fetchTraffic(apiSource!.token),
     staleTime: 60_000,
     enabled: isApi,
   });
 
-  const data: RepoTraffic[] = isApi ? (query.data ?? []) : (source as any).data;
+  const data: RepoTraffic[] = isApi ? (query.data ?? []) : (csvSource!.data ?? []);
   const isLoading = isApi && query.isLoading;
   const isError = isApi && query.isError;
 
@@ -62,6 +66,16 @@ export function DashboardView({
       setDir("desc");
     }
   }
+
+  // Derive display values from the narrowed types
+  const avatarUrl = apiSource?.auth.avatar_url || DEFAULT_AVATAR;
+  const displayName = apiSource
+    ? (apiSource.auth.name || apiSource.auth.username)
+    : (csvSource?.filename || "Demo User");
+  const displayHandle = apiSource
+    ? "@" + apiSource.auth.username
+    : (csvSource?.filename ? "CSV Upload" : "@octocat");
+  const showDemoBadge = !isApi && !csvSource?.filename;
 
   return (
     <div className="min-h-screen">
@@ -99,26 +113,18 @@ export function DashboardView({
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2.5">
               <img
-                src={
-                  isApi
-                    ? (source as any).auth.avatar_url || DEFAULT_AVATAR
-                    : DEFAULT_AVATAR
-                }
-                alt={isApi ? (source as any).auth.name || (source as any).auth.username : ((source as any).filename || "Demo user")}
+                src={avatarUrl}
+                alt={displayName}
                 onError={(e) => {
                   (e.currentTarget as HTMLImageElement).src = DEFAULT_AVATAR;
                 }}
                 className="h-8 w-8 rounded-full ring-1 ring-primary/40"
               />
               <div className="hidden text-right leading-tight sm:block">
-                <p className="text-sm font-medium">
-                  {isApi ? (source as any).auth.name || (source as any).auth.username : ((source as any).filename || "Demo User")}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {isApi ? "@" + (source as any).auth.username : (!(source as any).filename ? "@octocat" : "CSV Upload")}
-                </p>
+                <p className="text-sm font-medium">{displayName}</p>
+                <p className="text-xs text-muted-foreground">{displayHandle}</p>
               </div>
-              {!isApi && !(source as any).filename && (
+              {showDemoBadge && (
                 <span className="hidden items-center gap-1.5 rounded-lg bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary ring-1 ring-primary/25 sm:flex">
                   <FileSpreadsheet className="h-3.5 w-3.5" />
                   Demo

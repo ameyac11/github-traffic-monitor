@@ -45,7 +45,7 @@ export function LoginView({
     try {
       const [auth] = await Promise.all([
         authenticate(token.trim()),
-        new Promise((r) => setTimeout(r, 25000))
+        new Promise((r) => setTimeout(r, 25000)), // intentional: GitHub fetch takes 30-35s
       ]);
       onApiSuccess(auth, token.trim());
     } catch (err) {
@@ -65,7 +65,7 @@ export function LoginView({
     try {
       const [data] = await Promise.all([
         uploadCsv(file),
-        new Promise((r) => setTimeout(r, 3000))
+        new Promise((r) => setTimeout(r, 4000)), // intentional: animation effect
       ]);
       onCsvSuccess(data, file.name);
     } catch (err) {
@@ -76,7 +76,7 @@ export function LoginView({
   }
 
   if (loading) {
-    return <LoadingScreen label={mode === "api" ? "Connecting your account…" : "Processing your CSV…"} durationMs={mode === "api" ? 25000 : 3000} />;
+    return <LoadingScreen label={mode === "api" ? "Connecting your account…" : "Processing your CSV…"} durationMs={mode === "api" ? 25000 : 4000} />;
   }
 
   return (

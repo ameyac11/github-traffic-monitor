@@ -132,7 +132,7 @@ import gitlytics
 # Fetch traffic for all repositories accessible by the token
 df = gitlytics.fetch_traffic(
     token="ghp_your_token",
-    return_format="dataframe"  # Options: "dataframe" (Pandas), "timeseries" (React Chart-ready dict), or "raw" (JSON API payload)
+    return_format="dataframe"  # Options: "dataframe" (Pandas), "timeseries" (chart-ready dict), or "summary" (per-repo totals dict)
 )
 
 # Fetch traffic for a single specific repository and print the table to stdout
@@ -156,7 +156,7 @@ gitlytics.fetch_traffic(
 | `token` | `str` | *Required* | GitHub Personal Access Token with `repo` scope enabled. |
 | `repo_name` | `str` | `None` | Specific repository name (e.g. `"user/repo"`). If `None`, fetches all repositories. |
 | `print_table` | `bool` | `False` | If `True`, formats and prints a detailed ASCII traffic table to the console. |
-| `return_format` | `str` | `"dataframe"` | The format of returned data: `"dataframe"` (Pandas DataFrame), `"timeseries"`, or `"raw"`. |
+| `return_format` | `str` | `"dataframe"` | The format of returned data: `"dataframe"` (Pandas DataFrame), `"timeseries"` (chart-ready nested dict), or `"summary"` (per-repo totals dict). |
 | `save_file` | `str` | `None` | Optional. File path where the fetched data will be saved (CSV or JSON). |
 
 ---

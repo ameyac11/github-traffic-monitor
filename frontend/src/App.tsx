@@ -5,9 +5,10 @@ import type { AuthResult, RepoTraffic } from "@/lib/github-api";
 
 const STORAGE_KEY = "gh-traffic-session";
 
-type Session =
-  | { mode: "api"; auth: AuthResult; token: string }
-  | { mode: "csv"; data: RepoTraffic[]; filename?: string };
+// Fix #21: Properly typed discriminated union — no `as any` needed downstream.
+type ApiSession = { mode: "api"; auth: AuthResult; token: string };
+type CsvSession = { mode: "csv"; data: RepoTraffic[]; filename?: string };
+type Session = ApiSession | CsvSession;
 
 export function App() {
   const [session, setSession] = useState<Session | null>(null);
@@ -15,7 +16,10 @@ export function App() {
 
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
+      // Fix #15: Use sessionStorage instead of localStorage so the token is
+      // cleared when the browser tab/window is closed. Raw GitHub tokens
+      // should not survive browser restarts in plaintext.
+      const raw = sessionStorage.getItem(STORAGE_KEY);
       if (raw) setSession(JSON.parse(raw));
     } catch {
       /* ignore */
@@ -26,7 +30,9 @@ export function App() {
   function persist(s: Session) {
     setSession(s);
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+      // Fix #15: Store in sessionStorage (cleared on tab close) rather than
+      // localStorage (persists indefinitely and is readable by any JS on the origin).
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(s));
     } catch {
       /* ignore quota errors */
     }
@@ -42,7 +48,7 @@ export function App() {
 
   function handleLogout() {
     setSession(null);
-    localStorage.removeItem(STORAGE_KEY);
+    sessionStorage.removeItem(STORAGE_KEY);
   }
 
   if (!ready) return null;
