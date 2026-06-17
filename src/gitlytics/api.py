@@ -144,7 +144,7 @@ def serve_index():
         return FileResponse(index_file)
     return JSONResponse(
         status_code=503,
-        content={"error": "Frontend not found. Run 'npm run build' in the frontend directory."}
+        content={"error": "Dashboard not found. Run 'npm run build' in the dashboard directory."}
     )
 
 
@@ -167,7 +167,7 @@ def serve_spa_fallback(full_path: str):
 
     return JSONResponse(
         status_code=503,
-        content={"error": "Frontend not found. Run 'npm run build' in the frontend directory."}
+        content={"error": "Dashboard not found. Run 'npm run build' in the dashboard directory."}
     )
 
 
