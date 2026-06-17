@@ -15,13 +15,21 @@
 
 ✨ **[Try it live now at gitlytics.dev](https://gitlytics.dev)** ✨
 
+<br/>
+
+> **🐍 Native Python API**
+> 
+> You can import Gitlytics natively into your own Python applications to build custom integrations, run custom cron workflows, or serve the dashboard programmatically on your own cloud servers.
+> 
+> 📚 **[Read the Full API Documentation](https://docs.gitlytics.dev)**
+
 Please consider giving this project a ⭐ if you find it helpful!
 
 </div>
 
 ---
 
-> **⚠️ NOTE: V0.1.2 ARCHITECTURE UPGRADE!** <br/>
+> **⚠️ NOTE: V0.1.3 ARCHITECTURE UPGRADE!** <br/>
 > Formerly `github-traffic-monitor`, we have officially rebranded to **`gitlytics`**! We completely migrated away from Streamlit. The dashboard is now a **React + Vite** SPA, powered by a **FastAPI** backend!
 
 ---
@@ -38,7 +46,8 @@ Please consider giving this project a ⭐ if you find it helpful!
 
 ## 📌 Table of Contents
 
-- [🚨 The 14-Day Catch (And How We Fix It)](#the-14-day-catch-and-how-we-fix-it)
+- [🔗 The Gitlytics Ecosystem](#-the-gitlytics-ecosystem)
+- [🚨 The 14-Day Catch (And How We Fix It)](#-the-14-day-catch-and-how-we-fix-it)
 - [🛠️ Installation](#installation)
   - [🔑 Generating a GitHub Personal Access Token](#generating-a-github-personal-access-token)
 - [⌨️ The 3 Core CLI Commands](#the-3-core-cli-commands)
@@ -52,6 +61,15 @@ Please consider giving this project a ⭐ if you find it helpful!
 - [📊 CSV Output Columns](#csv-output-columns)
 - [🌟 Show Your Support](#show-your-support)
 - [📄 License](#license)
+
+---
+
+## 🔗 The Gitlytics Ecosystem
+
+The full Gitlytics ecosystem spans across a few repositories. If you are looking for the live web dashboard or the automation cron job, check out the links below:
+
+- 🌐 **[Gitlytics Web Ecosystem](https://gitlytics.dev)**: The production React Dashboard and VitePress documentation site.
+- ⚙️ **[Gitlytics Automation](https://github.com/ameyac11/gitlytics-github-traffic-automation)**: The GitHub Action companion tool that automates fetching and saving to defeat GitHub's 14-day traffic limit.
 
 ---
 
@@ -124,7 +142,7 @@ gitlytics dashboard
 
 You can import Gitlytics natively into your own Python applications to build custom integrations, run custom cron workflows, or serve the dashboard programmatically on your own cloud servers.
 
-📚 **[Read the Full API Documentation](docs/api_documentation.md)**
+📚 **[Read the Full API Documentation](https://docs.gitlytics.dev)**
 
 ### 1️⃣ `gitlytics.fetch_traffic()`
 Fetches the last 14 days of traffic data (views, clones, referrers, paths) for one or more repositories.
