@@ -12,3 +12,15 @@ dist/
 *.egg-info/
 .pytest_cache/
 node_modules/
+
+# Test artifacts
+.coverage
+htmlcov/
+.tox/
+
+# OS and logs
+.DS_Store
+*.log
+
+# Built frontend assets
+src/gitlytics/static/
