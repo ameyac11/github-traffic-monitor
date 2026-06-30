@@ -74,13 +74,11 @@ class TestGetPublicUser:
             get_public_user("ameyac11")
 
     @patch("gitlytics.core.requests.get")
-    def test_network_error_returns_fallback(self, mock_get):
-        # A connection error should not crash — returns a minimal fallback dict
+    def test_network_error_raises_runtime_error(self, mock_get):
         import requests
         mock_get.side_effect = requests.exceptions.ConnectionError("offline")
-        profile = get_public_user("someuser")
-        assert profile["login"] == "someuser"
-        assert profile["name"] == "someuser"
+        with pytest.raises(RuntimeError, match="unreachable"):
+            get_public_user("someuser")
 
     @patch("gitlytics.core.requests.get")
     def test_returns_all_expected_keys(self, mock_get):
@@ -108,13 +106,12 @@ class TestGetPublicUser:
             assert key in profile, f"Missing key: {key}"
 
     @patch("gitlytics.core.requests.get")
-    def test_non_404_server_error_returns_fallback(self, mock_get):
-        # 5xx or unexpected codes should log a warning and return fallback
+    def test_non_404_server_error_raises_runtime_error(self, mock_get):
         mock_resp = MagicMock()
         mock_resp.status_code = 500
         mock_get.return_value = mock_resp
-        profile = get_public_user("someone")
-        assert "login" in profile
+        with pytest.raises(RuntimeError):
+            get_public_user("someone")
 
     @patch("gitlytics.core.requests.get")
     def test_html_url_present(self, mock_get):

@@ -5,14 +5,16 @@ Powers the FastAPI backend — serves traffic data and the React dashboard to th
 import hashlib
 import logging
 import os
+import secrets
 import shutil
+import threading as _threading
 import time as _time
 import uuid
 from collections import OrderedDict
 from pathlib import Path
 
 import pandas as pd
-from fastapi import FastAPI, HTTPException, Body, File, Header, Response, UploadFile
+from fastapi import FastAPI, HTTPException, Body, File, Header, Request, Response, UploadFile, Depends
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -22,13 +24,14 @@ from gitlytics.core import (
     get_user_profile,
     get_public_user,
     get_public_repos,
+    validate_github_username,
     fetch_traffic_data,
     fetch_deep_stats_for_top,
     fetch_star_history,
     GitHubRateLimitError,
     StarHistoryFetchError,
 )
-from gitlytics.process import process_uploaded_csv, build_react_payload
+from gitlytics.process import process_uploaded_csv, build_react_payload, _to_bool
 
 logger = logging.getLogger(__name__)
 
@@ -39,9 +42,11 @@ app = FastAPI(title="GitHub Traffic API")
 _ALLOWED_ORIGINS = [
     "http://localhost",
     "http://localhost:3000",
+    "http://localhost:4173",
     "http://localhost:8000",
     "http://127.0.0.1",
     "http://127.0.0.1:3000",
+    "http://127.0.0.1:4173",
     "http://127.0.0.1:8000",
 ]
 
@@ -61,11 +66,55 @@ app.add_middleware(
 # OrderedDict + insert-order eviction gives us a bounded LRU without
 # pulling in functools.lru_cache (which can't be cleared on TTL).
 _auth_cache: "OrderedDict[str, tuple]" = OrderedDict()
-_AUTH_CACHE_TTL = 300  # 5 minutes
+_auth_cache_lock = _threading.Lock()
+_AUTH_CACHE_TTL = 300  # 5 minutes — applied only to positive (valid=True) results.
+_AUTH_NEG_TTL = 10  # short TTL for negative results so a transient 5xx doesn't lock the user out.
 _AUTH_CACHE_MAX = 256  # cap entries so a long-running worker can't grow unbounded
 
 # Hard cap on CSV upload size — prevents DoS via /api/upload-csv.
 _MAX_UPLOAD_BYTES = 25 * 1024 * 1024
+
+
+class _SecurityHeadersMiddleware:
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        async def send_wrapper(message):
+            if message["type"] == "http.response.start":
+                headers = list(message.get("headers", []))
+                headers.extend([
+                    (b"x-content-type-options", b"nosniff"),
+                    (b"x-frame-options", b"DENY"),
+                    (b"referrer-policy", b"strict-origin-when-cross-origin"),
+                ])
+                message = {**message, "headers": headers}
+            await send(message)
+
+        await self.app(scope, receive, send_wrapper)
+
+
+app.add_middleware(_SecurityHeadersMiddleware)
+
+
+def _require_upload_access(
+    request: Request,
+    x_upload_key: str | None = Header(default=None),
+) -> None:
+    client_host = (request.client.host if request.client else "").lower()
+    if client_host in ("127.0.0.1", "::1", "testclient", "testserver"):
+        return
+    expected = (os.environ.get("GITLYTICS_UPLOAD_KEY") or "").strip()
+    if not expected:
+        raise HTTPException(status_code=403, detail="Upload not allowed from this host.")
+    got = (x_upload_key or "").strip()
+    if got and secrets.compare_digest(got, expected):
+        return
+    raise HTTPException(status_code=403, detail="Upload not allowed from this host.")
 
 
 def _get_token(token: str = None) -> str:
@@ -77,21 +126,28 @@ def _get_token(token: str = None) -> str:
 
 def _validate_token_cached(token: str):
     # M-1: cache validation results to avoid a double HTTP round-trip on every /api/traffic call
-    from gitlytics.core import validate_token as _validate_token
     key = hashlib.sha256(token.encode()).hexdigest()[:16]
     now = _time.time()
-    cached = _auth_cache.get(key)
-    if cached is not None:
-        valid, username, expires = cached
-        if now < expires:
-            # Refresh insertion order so an active key isn't evicted FIFO-style.
-            _auth_cache.move_to_end(key)
-            return valid, username
-    valid, username = _validate_token(token)
-    _auth_cache[key] = (valid, username, now + _AUTH_CACHE_TTL)
-    _auth_cache.move_to_end(key)
-    while len(_auth_cache) > _AUTH_CACHE_MAX:
-        _auth_cache.popitem(last=False)
+    # Lock guards the read-then-write so two threads can't both miss the
+    # cache and double-fetch the same token (FastAPI runs sync routes in
+    # a worker threadpool, so this race is reachable under load).
+    with _auth_cache_lock:
+        cached = _auth_cache.get(key)
+        if cached is not None:
+            valid, username, expires = cached
+            if now < expires:
+                # Refresh insertion order so an active key isn't evicted FIFO-style.
+                _auth_cache.move_to_end(key)
+                return valid, username
+    valid, username = validate_token(token)
+    # Negative results get a short TTL so a transient upstream 5xx doesn't
+    # lock the user out for 5 minutes; positive results cache fully.
+    ttl = _AUTH_CACHE_TTL if valid else _AUTH_NEG_TTL
+    with _auth_cache_lock:
+        _auth_cache[key] = (valid, username, now + ttl)
+        _auth_cache.move_to_end(key)
+        while len(_auth_cache) > _AUTH_CACHE_MAX:
+            _auth_cache.popitem(last=False)
     return valid, username
 
 
@@ -131,29 +187,19 @@ def auth(token: str = Body("", embed=True)):
 
 @app.post("/api/username")
 def get_username_data(username: str = Body("", embed=True)):
-    """Fetches public profile and repos for any GitHub username — no token required."""
     if not username or not username.strip():
         raise HTTPException(status_code=400, detail="Username is required.")
     try:
-        profile = get_public_user(username.strip())
-        # Distinguish "user found" (login matches the request) from "GitHub failed
-        # and we returned a stub". Returning 200 for the latter would silently mask
-        # upstream outages.
-        if profile.get("login") == username.strip() and profile.get("html_url"):
-            pass
-        elif profile.get("login") == username.strip():
-            # Found but GitHub didn't include html_url — still treat as success.
-            pass
-        else:
-            raise HTTPException(status_code=502, detail="GitHub did not return a profile.")
-        repos = get_public_repos(username.strip())
+        clean = validate_github_username(username.strip())
+        profile = get_public_user(clean)
+        repos = get_public_repos(clean)
         return {"profile": profile, "repos": repos}
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
-    except HTTPException:
-        raise
+    except RuntimeError:
+        raise HTTPException(status_code=502, detail="GitHub is temporarily unavailable.")
     except Exception as exc:
-        logger.warning(f"Username fetch failed for {username}: {exc}")
+        logger.warning("Username fetch failed for %s: %s", username, exc)
         raise HTTPException(status_code=500, detail="Failed to fetch GitHub data.")
 
 
@@ -200,6 +246,13 @@ def get_traffic(token: str = Body("", embed=True)):
 
     if not df.empty:
         df = df.drop_duplicates(subset=["date", "repository"], keep="last")
+
+    # Normalize `is_private` to a real bool. CSV round-trip + pd.concat
+    # widens the dtype to object (mix of bool, "True"/"False" strings, and
+    # NaN); without this, downstream code calling `bool("False")` would
+    # label every public repo as private.
+    if not df.empty and "is_private" in df.columns:
+        df["is_private"] = df["is_private"].map(_to_bool).astype(bool)
 
     df = df.replace([float('inf'), float('-inf')], None).where(pd.notnull(df), None)
 
@@ -249,12 +302,20 @@ def get_star_history_endpoint(
         # sense than 429 here so the SPA can distinguish "GitHub is throttling us"
         # from "your request was malformed".
         raise HTTPException(status_code=400, detail=str(exc))
+    except ValueError as exc:
+        # fetch_star_history raises ValueError for empty owner / repo / trailing slash;
+        # returning 400 is more honest than letting Starlette surface a 500.
+        raise HTTPException(status_code=400, detail=str(exc))
     response.headers["Cache-Control"] = "public, max-age=86400"
     return {"owner": owner, "repo": repo, "points": points}
 
 
 @app.post("/api/upload-csv")
-def upload_csv(file: UploadFile = File(...)):
+def upload_csv(
+    request: Request,
+    file: UploadFile = File(...),
+    _: None = Depends(_require_upload_access),
+):
     try:
         data_dir = os.environ.get("GITLYTICS_DATA_DIR")
         if data_dir:
@@ -289,7 +350,8 @@ def upload_csv(file: UploadFile = File(...)):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.warning("CSV upload failed: %s", e)
+        raise HTTPException(status_code=400, detail="Failed to process CSV upload.")
 
 
 # Static file serving
@@ -311,21 +373,27 @@ def serve_index():
 def serve_spa_fallback(full_path: str):
     """SPA catch-all — returns index.html so React Router handles navigation."""
     # Any unhandled /api/* path is a real 404, not a SPA route.
-    if full_path.startswith("api/"):
+    if full_path.startswith("api/") or full_path.startswith("assets/"):
         return JSONResponse(status_code=404, content={"error": "Not found."})
 
-    asset_file = frontend_dir / full_path
-    if asset_file.exists() and asset_file.is_file():
+    # Confine the resolved path to frontend_dir — otherwise a request like
+    # `GET /..%2F..%2Fapp.py` would let `asset_file` escape the static
+    # directory and serve arbitrary files the worker can read.
+    frontend_root = frontend_dir.resolve()
+    try:
+        asset_file = (frontend_dir / full_path).resolve()
+    except (OSError, ValueError):
+        # `resolve()` can raise on broken symlinks or odd encodings.
+        return JSONResponse(status_code=404, content={"error": "Not found."})
+    is_inside = asset_file == frontend_root or asset_file.is_relative_to(frontend_root)
+    if is_inside and asset_file.is_file():
         return FileResponse(asset_file)
 
     index_file = frontend_dir / "index.html"
     if index_file.exists():
         return FileResponse(index_file)
 
-    return JSONResponse(
-        status_code=503,
-        content={"error": "Dashboard assets not found in the package installation."}
-    )
+    return JSONResponse(status_code=404, content={"error": "Not found."})
 
 
 assets_dir = frontend_dir / "assets"

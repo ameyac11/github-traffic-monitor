@@ -177,11 +177,15 @@ def run_sync_cycle(token: str, repo_names=None, data_dir="./data", output_mode="
 
     final_rows.sort(key=lambda x: (str(x.get("date", "")), str(x.get("repository", ""))))
 
-    # Write everything back to the CSV file
-    with open(csv_path, "w", newline="", encoding="utf-8") as f:
+    # Atomic write: dump to a sibling .tmp file then os.replace() it into
+    # place. A crash mid-write leaves the original CSV intact, so a single
+    # interrupted sync never corrupts the user's whole traffic history.
+    tmp_path = csv_path + ".tmp"
+    with open(tmp_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=existing_fields, extrasaction='ignore')
         writer.writeheader()
         writer.writerows(final_rows)
+    os.replace(tmp_path, csv_path)
 
     logger.info(f"Successfully processed traffic data. Added {new_records_added} new daily records to {csv_path}")
 
@@ -234,19 +238,24 @@ def run_sync(token: str, repo_names=None, data_dir="./data", output_mode="monthl
             # Always re-validate the token before fetching to catch expiry early
             is_valid, msg = validate_token(token)
             if not is_valid:
-                # Distinguish between a dead token (stop forever) and a network blip (retry next cycle)
+                # Distinguish between a dead token (stop forever) and a network
+                # blip (retry next cycle). Both 401 and 403 are terminal —
+                # 401 means the token is gone; 403 means the token is fine but
+                # lacks permissions, which is also a "never coming back" state.
                 msg_lower = msg.lower()
                 is_auth_failure = (
                     "401" in msg
+                    or "403" in msg
                     or "authentication failed" in msg_lower
                     or "invalid token" in msg_lower
                     or "revoked" in msg_lower
                     or "bad credentials" in msg_lower
+                    or "insufficient permissions" in msg_lower
                 )
                 if is_auth_failure:
                     logger.critical(
-                        "FATAL: Token is expired, revoked, or invalid (401 Unauthorized). "
-                        "Terminating daemon to prevent zombie process."
+                        "FATAL: Token is expired, revoked, or lacks permissions "
+                        "(401/403). Terminating daemon to prevent zombie process."
                     )
                     sys.exit(1)
                 else:

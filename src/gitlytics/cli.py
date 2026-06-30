@@ -72,7 +72,12 @@ def main():
 
     # ── DASHBOARD subcommand ──────────────────────────────────────────────────
     dash_parser = subparsers.add_parser("dashboard", help="Serve the local React dashboard.")
-    dash_parser.add_argument("--host", default="127.0.0.1", help="Host IP.")
+    dash_parser.add_argument("--host", default="127.0.0.1", help="Host IP (default 127.0.0.1).")
+    dash_parser.add_argument(
+        "--public-bind",
+        action="store_true",
+        help="Allow binding to 0.0.0.0 (insecure without reverse-proxy auth).",
+    )
     dash_parser.add_argument("--port", type=int, default=8000, help="Port to bind.")
     dash_parser.add_argument("-t", "--token", help="GitHub token for headless TV display.")
     dash_parser.add_argument("--data-dir", help="Inject historical CSV database.")
@@ -151,9 +156,16 @@ def main():
             sys.exit(2)
 
     elif args.command == "dashboard":
-        print(f"\n[Gitlytics] Starting Gitlytics Dashboard on http://{args.host}:{args.port}\n")
+        host = args.host
+        if host == "0.0.0.0" and not args.public_bind:
+            print("❌ Error: Use --public-bind to listen on 0.0.0.0 (default is 127.0.0.1).")
+            sys.exit(2)
+        if args.public_bind:
+            host = "0.0.0.0"
+            print("⚠️  Warning: dashboard bound to all interfaces — use only behind a trusted network or reverse proxy.")
+        print(f"\n[Gitlytics] Starting Gitlytics Dashboard on http://{host}:{args.port}\n")
         serve_dashboard(
-            host=args.host,
+            host=host,
             port=args.port,
             token=token,
             data_dir=args.data_dir

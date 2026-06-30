@@ -353,6 +353,31 @@ class TestRootEndpoint:
         # Make sure we got JSON, not the HTML SPA shell
         assert "text/html" not in response.headers.get("content-type", "")
 
+    def test_path_traversal_is_blocked(self):
+        # Bug fix: a request like `/..%2F..%2Fapp.py` previously let
+        # `asset_file = frontend_dir / full_path` resolve OUTSIDE the
+        # static directory and serve any file the worker could read.
+        # The SPA fallback must now resolve + confine the path so the
+        # worker never streams source files back to the browser.
+        for evil_path in ("/../api.py", "/..%2F..%2Fapi.py", "/../../etc/passwd"):
+            response = client.get(evil_path)
+            # Two acceptable outcomes:
+            #   200 + HTML — the SPA fallback kicked in (no asset file
+            #     resolved *inside* frontend_dir, so we served index.html).
+            #   404 / 503 — no index.html available.
+            # What is NEVER acceptable: serving a non-HTML response body
+            # whose contents are a source file (api.py, /etc/passwd).
+            assert response.status_code in (200, 404, 503), (
+                f"Unexpected status for {evil_path!r}: {response.status_code}"
+            )
+            # If we served HTML (SPA fallback), the body is the index — not
+            # a leaked source file. If we served JSON 404/503, body must
+            # not contain the literal path we tried to read.
+            body = response.text
+            assert "api.py" not in body or "<!doctype html>" in body.lower(), (
+                f"Source-file content leaked for {evil_path!r}: {body[:200]!r}"
+            )
+
 
 # ── CORS allowlist (v0.2.1 fix) ──────────────────────────────────────────────
 

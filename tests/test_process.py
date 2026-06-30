@@ -63,10 +63,9 @@ class TestParseRaw:
         assert isinstance(result, list)
         assert result[0]["referrer"] == "github.com"
 
-    def test_python_literal_fallback(self):
-        # ast.literal_eval is the fallback for Python-formatted strings
+    def test_python_literal_returns_empty_list(self):
         result = _parse_raw("[{'referrer': 'google.com', 'count': 2}]")
-        assert isinstance(result, list)
+        assert result == []
 
     def test_empty_string_returns_empty_list(self):
         # An empty string means "no data" — return [] not None
@@ -302,6 +301,34 @@ class TestProcessUploadedCsv:
         })
         with pytest.raises(ValueError, match="repository"):
             process_uploaded_csv(csv_file)
+
+    def test_is_private_string_bools_are_coerced(self):
+        # Regression for the `bool("False") → True` bug: a CSV that
+        # was roundtripped through disk write+read comes back with
+        # `is_private` as strings ("True"/"False") rather than real
+        # bools. process_uploaded_csv must coerce these to a real bool
+        # column so downstream consumers (e.g. build_react_payload)
+        # don't silently mislabel public repos as private.
+        csv_file = self._make_csv_bytes({
+            "date": "2025-06-14",
+            "repository": "user/repo",
+            "is_private": "False",
+        })
+        result = process_uploaded_csv(csv_file)
+        assert result["is_private"].dtype == bool
+        assert bool(result["is_private"].iloc[0]) is False
+
+    def test_is_private_numeric_coerced(self):
+        # Same regression — many external CSV exporters write 1/0
+        # rather than True/False; both must round-trip correctly.
+        csv_file = self._make_csv_bytes({
+            "date": "2025-06-14",
+            "repository": "user/private",
+            "is_private": "1",
+        })
+        result = process_uploaded_csv(csv_file)
+        assert bool(result["is_private"].iloc[0]) is True
+
 
     def test_returns_dataframe(self):
         # The function must always return a pandas DataFrame

@@ -2,7 +2,6 @@
 gitlytics/process.py
 Handles processing Tidy DataFrames into final JSON formats for the dashboard.
 """
-import ast
 import json
 import logging
 from datetime import datetime, timezone
@@ -21,6 +20,31 @@ def _is_nullish(val) -> bool:
         return True
     s = str(val).strip().lower()
     return s in ("", "nan", "none", "null")
+
+
+def _to_bool(val) -> bool:
+    """Parse a value as a strict boolean.
+
+    `bool("False")` returns True because every non-empty string is truthy,
+    which silently corrupts CSV-roundtripped `is_private` columns. This
+    helper accepts bool / numeric / common string spellings and returns
+    False for anything ambiguous.
+    """
+    if isinstance(val, bool):
+        return val
+    if val is None:
+        return False
+    if isinstance(val, (int, float)):
+        # Catch NaN explicitly so a missing-cell numeric doesn't propagate.
+        try:
+            if np.isnan(val):
+                return False
+        except (TypeError, ValueError):
+            pass
+        return bool(val)
+    if isinstance(val, str):
+        return val.strip().lower() in ("true", "1", "yes", "y", "t")
+    return False
 
 
 def build_json_payload(df: pd.DataFrame, return_format: str = "timeseries", export_public_only: bool = True) -> dict:
@@ -52,7 +76,7 @@ def build_json_payload(df: pd.DataFrame, return_format: str = "timeseries", expo
         r_unique_c = _safe_int(group["unique_cloners"].sum()) if "unique_cloners" in group.columns else 0
         r_stars = _safe_int(group["stars"].dropna().iloc[-1]) if "stars" in group.columns and not group["stars"].dropna().empty else 0
         r_forks = _safe_int(group["forks"].dropna().iloc[-1]) if "forks" in group.columns and not group["forks"].dropna().empty else 0
-        r_is_private = bool(group["is_private"].dropna().iloc[-1]) if "is_private" in group.columns and not group["is_private"].dropna().empty else False
+        r_is_private = _to_bool(group["is_private"].dropna().iloc[-1]) if "is_private" in group.columns and not group["is_private"].dropna().empty else False
 
         top_ref = _safe_str(group["top_referrer"].dropna().iloc[-1]) if "top_referrer" in group.columns and not group["top_referrer"].dropna().empty else ""
         top_path = _safe_str(group["top_path"].dropna().iloc[-1]) if "top_path" in group.columns and not group["top_path"].dropna().empty else ""
@@ -131,23 +155,27 @@ def process_uploaded_csv(uploaded_file) -> pd.DataFrame:
 
     if "date" not in raw_df.columns:
         raise ValueError("Invalid CSV format: missing required 'date' column")
+
+    # Coerce `is_private` to a real bool. CSVs from any external tool tend
+    # to write True/False as strings ("True"/"False") or as 1/0, and a
+    # missing column concatenated later widens the dtype to object. Doing
+    # this here keeps every downstream consumer safe.
+    if "is_private" in raw_df.columns:
+        raw_df["is_private"] = raw_df["is_private"].map(_to_bool).astype(bool)
     return raw_df
 
 
 def _parse_raw(val) -> list:
-    # Try JSON first, then Python literal eval, then give up
     if _is_nullish(val):
         return []
     if isinstance(val, list):
         return val
     try:
-        return json.loads(val)
+        parsed = json.loads(val)
+        return parsed if isinstance(parsed, list) else []
     except Exception:
-        try:
-            return ast.literal_eval(val)
-        except Exception:
-            logger.warning(f"_parse_raw: could not decode value {val!r:.80}; returning []")
-            return []
+        logger.warning(f"_parse_raw: could not decode value {val!r:.80}; returning []")
+        return []
 
 
 def _safe_int(val, fallback=0) -> int:
@@ -191,7 +219,7 @@ def build_react_payload(df: pd.DataFrame, deep_stats: dict = None) -> list:
         r_unique_c = _safe_int(group["unique_cloners"].sum()) if "unique_cloners" in group.columns else 0
         r_stars = _safe_int(group["stars"].dropna().iloc[-1]) if "stars" in group.columns and not group["stars"].dropna().empty else 0
         r_forks = _safe_int(group["forks"].dropna().iloc[-1]) if "forks" in group.columns and not group["forks"].dropna().empty else 0
-        r_is_private = bool(group["is_private"].dropna().iloc[-1]) if "is_private" in group.columns and not group["is_private"].dropna().empty else False
+        r_is_private = _to_bool(group["is_private"].dropna().iloc[-1]) if "is_private" in group.columns and not group["is_private"].dropna().empty else False
 
         top_ref = _safe_str(group["top_referrer"].dropna().iloc[-1]) if "top_referrer" in group.columns and not group["top_referrer"].dropna().empty else ""
         top_ref_views = _safe_int(group["top_referrer_views"].dropna().iloc[-1]) if "top_referrer_views" in group.columns and not group["top_referrer_views"].dropna().empty else 0

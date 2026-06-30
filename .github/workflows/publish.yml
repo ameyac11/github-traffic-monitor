@@ -20,12 +20,12 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364ed6af47
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@0b93645e9fcd83123c6fbc396a4d483a32fd2266
         with:
-          python-version: "3.x"
+          python-version: "3.12"
 
       - name: Install build dependencies
         run: pip install build

@@ -18,6 +18,7 @@ from datetime import datetime, timezone, timedelta
 logger = logging.getLogger(__name__)
 
 BASE = "https://api.github.com"
+GITHUB_USERNAME_RE = re.compile(r"^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,37}[a-zA-Z0-9])?$", re.IGNORECASE)
 # Single source of truth for the GitHub media-type + API version headers.
 _GITHUB_BASE_HEADERS = {
     "Accept": "application/vnd.github+json",
@@ -50,7 +51,8 @@ def validate_token(token: str) -> tuple[bool, str]:
     except requests.exceptions.ConnectionError:
         return False, "No internet connection."
     except Exception as e:
-        return False, str(e)
+        logger.warning("Token validation error: %s", e)
+        return False, "Authentication failed."
 
     if r.status_code == 200:
         data = r.json()
@@ -82,8 +84,16 @@ def get_user_profile(token: str) -> dict:
     return {"login": "", "name": "", "avatar_url": "", "followers": 0, "following": 0}
 
 
+def validate_github_username(username: str) -> str:
+    u = (username or "").strip()
+    if not u or not GITHUB_USERNAME_RE.match(u):
+        raise ValueError("Invalid GitHub username.")
+    return u
+
+
 def get_public_user(username: str) -> dict:
     """Fetches a public GitHub user profile — no PAT required."""
+    username = validate_github_username(username)
     try:
         r = requests.get(f"{BASE}/users/{username}", headers=_PUBLIC_HEADERS, timeout=10)
         if r.status_code == 200:
@@ -104,15 +114,15 @@ def get_public_user(username: str) -> dict:
             }
         if r.status_code == 404:
             raise ValueError(f"User '{username}' not found.")
-        # 5xx and other unexpected codes — log a warning and return a stub so the
-        # caller (the API endpoint) can return a 502 without leaking the failure.
         logger.warning(f"Failed to fetch user {username}: HTTP {r.status_code}")
+        raise RuntimeError(f"GitHub returned HTTP {r.status_code}.")
     except ValueError:
-        # Re-raise user-not-found as-is.
+        raise
+    except RuntimeError:
         raise
     except Exception as exc:
         logger.warning(f"Could not fetch public user profile: {exc}")
-    return {"login": username, "name": username, "avatar_url": ""}
+        raise RuntimeError("GitHub is unreachable.") from exc
 
 
 def _normalise_repo(repo: dict) -> dict:
@@ -174,6 +184,7 @@ def _fetch_public_repos_by_stars(username: str, per_page: int) -> list:
 
 
 def get_public_repos(username: str, max_repos: int = 50) -> list:
+    username = validate_github_username(username)
     """
     Fetches up to max_repos best public repos for a username using two calls:
       1. Most recently updated (catches active projects)

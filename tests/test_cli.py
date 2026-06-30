@@ -120,9 +120,8 @@ class TestCliDashboardCommand:
 
     @patch("gitlytics.cli.serve_dashboard")
     def test_dashboard_passes_host_and_port(self, mock_serve):
-        # Custom --host and --port values must be forwarded unchanged
         with patch.object(sys, "argv", [
-            "gitlytics", "dashboard", "--host", "0.0.0.0", "--port", "9000"
+            "gitlytics", "dashboard", "--host", "0.0.0.0", "--port", "9000", "--public-bind"
         ]):
             main()
         call_kwargs = mock_serve.call_args.kwargs
